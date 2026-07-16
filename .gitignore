@@ -1,0 +1,29 @@
+# ---- Terraform state (may contain secrets — the DB password lands here) ----
+*.tfstate
+*.tfstate.*
+.terraform/
+**/.terraform/*
+
+# ---- Variable files with real values (secrets) -----------------------------
+# Commit variables.tf (declarations) and the example, but NEVER real tfvars.
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# ---- Plan output (can embed sensitive attributes) --------------------------
+*.tfplan
+*.plan
+
+# ---- Crash logs ------------------------------------------------------------
+crash.log
+crash.*.log
+
+# ---- Editors / OS ----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Keep the committed lockfile for reproducible provider versions --------
+!.terraform.lock.hcl
