@@ -52,18 +52,22 @@ resource "aws_s3_bucket_versioning" "app_data" {
 }
 
 # -----------------------------------------------------------------------------
-# Server-side encryption at rest (AES-256).
+# Server-side encryption at rest (SSE-KMS with our CMK).
 #
-# Not explicitly requested, but a private data bucket should never store
-# plaintext objects. SSE-S3 is the zero-config baseline; swap to aws:kms for a
-# customer-managed key if compliance requires it.
+# A private data bucket should never store plaintext objects. We use SSE-KMS
+# with the customer-managed key from kms.tf (fixes Trivy AWS-0132), which adds
+# key rotation, an auditable key policy, and per-object decrypt logging in
+# CloudTrail over the AWS-owned AES256 key. `bucket_key_enabled` cuts KMS API
+# costs by using an S3 bucket-level data key instead of one call per object.
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.arn
     }
+    bucket_key_enabled = true
   }
 }

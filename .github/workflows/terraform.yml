@@ -50,8 +50,10 @@ jobs:
         with:
           scan-type: config
           scan-ref: .
-          # Fail the job only on high/critical findings; the dev baseline has a
-          # couple of documented, intentional trade-offs (see README) that would
-          # otherwise be flagged at lower severities.
+          # Fail on HIGH/CRITICAL misconfigurations. Encryption findings are
+          # fixed in code (KMS CMK for S3 + SNS); the remaining flags are
+          # deliberate, documented trade-offs listed with justification in
+          # .trivyignore (unrestricted egress, dev-tier public IPs).
           severity: HIGH,CRITICAL
           exit-code: "1"
+          trivyignores: .trivyignore

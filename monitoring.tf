@@ -23,6 +23,10 @@
 resource "aws_sns_topic" "alerts" {
   name = "${local.name_prefix}-aiops-alerts"
 
+  # Encrypt messages at rest with our CMK (fixes Trivy AWS-0095). The CloudWatch
+  # publish path and the KMS key policy (kms.tf) are aligned to allow this.
+  kms_master_key_id = aws_kms_key.main.id
+
   tags = {
     Name = "${local.name_prefix}-aiops-alerts"
   }

@@ -296,7 +296,21 @@ flagged here so they are decisions, not oversights:
   Manager with rotation.
 
 Baseline protections already included: S3 public-access block + versioning +
-SSE, EBS + RDS encryption at rest, and IMDSv2 required on the instance.
+**SSE-KMS with a customer-managed key (CMK)**, an **encrypted SNS topic**, EBS +
+RDS encryption at rest, IMDSv2 required on the instance, and an SSM instance
+profile for keyless admin access.
+
+### Static-analysis (Trivy) status
+
+The CI Trivy scan is **clean at HIGH/CRITICAL**. Encryption findings were fixed
+in code (the CMK in `kms.tf` encrypts both S3 and SNS). Two findings are
+deliberately accepted and documented with justification in
+[`.trivyignore`](.trivyignore):
+
+- **AWS-0104** (unrestricted egress) — instances need outbound for patching and
+  RDS-managed backups; ingress is tightly restricted.
+- **AWS-0164** (public-subnet IP) — the intended dev web tier; set
+  `enable_alb = true` to remove it (see [Production topology](#production-topology-enable_alb--true)).
 
 ---
 

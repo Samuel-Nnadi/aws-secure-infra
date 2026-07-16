@@ -1,0 +1,28 @@
+# =============================================================================
+# .trivyignore — deliberately-accepted findings, with justification
+#
+# These are NOT unreviewed suppressions. Each entry is an intentional
+# architectural decision documented in the README's "Security notes &
+# deliberate trade-offs" section. Everything Trivy flags that is genuinely
+# fixable (SNS/S3 encryption) has been fixed in code rather than ignored here.
+# =============================================================================
+
+# AWS-0104 — "Security group rule allows unrestricted egress to any IP address."
+# Accepted: both the EC2 and RDS instances need outbound internet for OS/package
+# patching (dnf update), and RDS uses it for managed backups/telemetry. Locking
+# egress to specific CIDRs is impractical for a general-purpose app server and
+# for AWS-managed RDS endpoints (which span large, changing IP ranges). Inbound
+# is already tightly restricted (least-privilege ingress); egress-open + tight
+# ingress is the standard posture for these tiers. In a locked-down environment
+# this would be replaced with egress via a proxy/NAT with allow-listed
+# destinations.
+AWS-0104
+
+# AWS-0164 — "Subnet associates public IP address."
+# Accepted for the DEV baseline only. The public subnets host the internet-
+# facing web tier by design. This is already toggleable: set enable_alb = true
+# to move the instance to a private subnet behind an ALB with no public IP
+# (see the "Production topology" section of the README). The subnet-level
+# map_public_ip_on_launch remains true because the subnet is, by definition,
+# the public tier; instance-level exposure is what the toggle controls.
+AWS-0164
