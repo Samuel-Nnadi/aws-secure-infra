@@ -25,9 +25,49 @@ data "aws_ssm_parameter" "al2023" {
 #   * vpc_security_group_ids-> EC2 SG (80/443 open, 22 admin-only)
 #   * ami                  -> latest AL2023 (resolved above)
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Instance profile granting SSM Session Manager + Run Command.
+#
+# Required for two things:
+#   * the AIOps remediation Lambda to run `ssm:SendCommand` on this instance
+#     (aiops.tf), and
+#   * keyless admin access via SSM Session Manager (better than open SSH).
+# AmazonSSMManagedInstanceCore is the AWS-managed least-privilege policy for the
+# SSM agent to register and receive commands.
+# -----------------------------------------------------------------------------
+resource "aws_iam_role" "ec2_ssm" {
+  name = "${local.name_prefix}-ec2-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-ec2-ssm-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
+  role       = aws_iam_role.ec2_ssm.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_ssm" {
+  name = "${local.name_prefix}-ec2-ssm-profile"
+  role = aws_iam_role.ec2_ssm.name
+}
+
 resource "aws_instance" "app" {
   ami           = data.aws_ssm_parameter.al2023.value
   instance_type = var.ec2_instance_type
+
+  # Attach the SSM instance profile so Run Command / Session Manager work.
+  iam_instance_profile = aws_iam_instance_profile.ec2_ssm.name
 
   # Placement depends on the topology:
   #   enable_alb = false -> public subnet + public IP (direct web tier, dev)

@@ -17,6 +17,12 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+
+    # Zips the inline remediation Lambda source (aiops.tf) at apply time.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 
@@ -36,6 +42,15 @@ provider "aws" {
       Project     = var.project_name
       Environment = var.environment
       ManagedBy   = "terraform"
+
+      # DevOps Guru "app boundary" tag. Its tag-based resource collection can
+      # only target keys that begin with "DevOps-Guru-", so we stamp every
+      # resource in the stack with this key. aiops.tf points DevOps Guru at it,
+      # which enrolls the whole 3-tier stack for ML analysis in one shot.
+      # The key is a static literal because DevOps Guru matches on the key
+      # string, and Terraform tag keys cannot be interpolated at the provider
+      # default_tags level in a way DevOps Guru would resolve.
+      "DevOps-Guru-aws-secure-infra" = var.environment
     }
   }
 }

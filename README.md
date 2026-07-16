@@ -68,8 +68,10 @@
 | `rds.tf`              | Private db.t3.micro PostgreSQL instance.                                    |
 | `nat.tf`              | NAT gateways + private route tables (production topology only).             |
 | `alb.tf`              | Application Load Balancer, target group, listener (production topology only).|
+| `monitoring.tf`       | SNS topic + ML anomaly-detection alarm on EC2 CPU (AIOps telemetry source). |
+| `aiops.tf`            | DevOps Guru, EventBridge, and the self-healing remediation Lambda + IAM.     |
 | `variables.tf`        | All inputs (password marked `sensitive`; `enable_alb` topology toggle).     |
-| `outputs.tf`          | EC2 public IP, ALB DNS, RDS endpoint, S3 bucket name, and more.            |
+| `outputs.tf`          | EC2 public IP, ALB DNS, RDS endpoint, S3 bucket name, SNS/AIOps, and more.  |
 | `.github/workflows/`  | CI: `fmt -check`, `init`, `validate`, and a Trivy security scan.           |
 
 ---
@@ -187,6 +189,78 @@ NAT (cheaper) vs. one per AZ (highly available — recommended for real prod).
 > deployment should add an HTTPS (:443) listener with an ACM certificate and
 > redirect :80 → :443. That needs a domain + certificate, so it is left as the
 > documented next step; the ALB security group already permits 443.
+
+---
+
+## AIOps: anomaly detection & self-healing
+
+`monitoring.tf` and `aiops.tf` layer an ML-driven detect-and-remediate pipeline
+on top of the stack. Telemetry flows from the infrastructure, into AWS's ML
+services, and down to an automated remediation Lambda:
+
+```
+  EC2 / RDS / ALB / S3 metrics
+        │
+        ├─▶ CloudWatch Anomaly Detection ── band breached ─▶ SNS ─▶ email/chatops
+        │     (ML band model, not a static 80% threshold)          │
+        │                                                          ▼
+        └─▶ Amazon DevOps Guru ── correlates the whole      EventBridge rule
+              tagged stack, raises an "insight"      (DevOps Guru insight +
+              on service degradation                  CloudWatch alarm events)
+                     │                                         │
+                     └──────────────────┬──────────────────────┘
+                                        ▼
+                            remediation_lambda (Python + boto3)
+                              parses payload → checks severity →
+                              ssm:SendCommand restarts the web tier
+                              (least-privilege IAM, scoped to ONE instance)
+```
+
+**Why anomaly detection instead of a static threshold?** A fixed "alert at 80%
+CPU" rule is both too noisy (a normal nightly batch job pages someone) and too
+blind (a service that hangs at 5% CPU looks "fine"). CloudWatch trains a model
+on the metric's own history and alerts when it leaves the learned band — in
+*either* direction, so an anomalous drop (a crashed service) is caught too. The
+band width is `var.anomaly_band_width` (the `2` in `ANOMALY_DETECTION_BAND(m1, 2)`).
+
+### Safety-first defaults
+
+Both the analysis and the remediation are **opt-in**, because one can cost money
+and the other can restart a production box:
+
+| Variable                  | Default | Effect                                                        |
+| ------------------------- | ------- | ------------------------------------------------------------- |
+| `enable_devops_guru`      | `false` | DevOps Guru is billed per resource-hour; enable deliberately. |
+| `enable_auto_remediation` | `false` | Lambda runs in **dry-run**: it logs and notifies what it *would* restart, but takes no action. Flip to `true` only after you trust the detection flow. |
+| `alert_email`             | `""`    | Set to receive SNS alerts (AWS sends a confirmation email).   |
+
+Recommended rollout:
+
+```bash
+# 1. Observe only: detection + notifications, no restarts, no DevOps Guru cost.
+terraform apply -var alert_email=you@example.com
+
+# 2. Add DevOps Guru correlation once you want deeper insights.
+terraform apply -var alert_email=you@example.com -var enable_devops_guru=true
+
+# 3. Turn on self-healing after validating the flow end-to-end.
+terraform apply -var alert_email=you@example.com \
+  -var enable_devops_guru=true -var enable_auto_remediation=true
+```
+
+### Least-privilege remediation
+
+The Lambda's IAM policy grants exactly four things: write its own logs, run the
+`AWS-RunShellScript` SSM document **against this one instance only**, read the
+command result, and publish to the one SNS topic. It cannot touch any other
+instance, run any other document, or reach any other resource — even if the
+handler code were compromised.
+
+> **SSM wiring:** `ssm:SendCommand` needs the SSM Agent (preinstalled on
+> AL2023) plus an instance profile granting `AmazonSSMManagedInstanceCore` —
+> both are now in place (`ec2.tf` attaches the profile), so Run Command and
+> Session Manager work out of the box. In production mode (`enable_alb = true`)
+> the instance reaches the SSM endpoints outbound through the NAT gateway.
 
 ---
 

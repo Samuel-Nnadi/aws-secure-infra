@@ -54,3 +54,37 @@ output "private_subnet_ids" {
   description = "IDs of the private subnets (data tier)."
   value       = aws_subnet.private[*].id
 }
+
+# -----------------------------------------------------------------------------
+# AIOps pipeline outputs
+# -----------------------------------------------------------------------------
+output "sns_alert_topic_arn" {
+  description = "ARN of the SNS topic that receives anomaly alerts and remediation notices. Subscribe Slack/PagerDuty/Lambda here."
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "cpu_anomaly_alarm_name" {
+  description = "Name of the ML anomaly-detection alarm on EC2 CPU."
+  value       = aws_cloudwatch_metric_alarm.ec2_cpu_anomaly.alarm_name
+}
+
+output "remediation_lambda_name" {
+  description = "Name of the self-healing remediation Lambda function."
+  value       = aws_lambda_function.remediation.function_name
+}
+
+output "auto_remediation_active" {
+  description = "Whether the Lambda will actually restart the instance (true) or run in dry-run/observe-only mode (false)."
+  value       = var.enable_auto_remediation
+}
+
+output "devops_guru_dashboard" {
+  description = "Amazon DevOps Guru dashboard URL plus enablement status and next steps for this stack."
+  value = join("\n", [
+    "DevOps Guru dashboard: https://${var.aws_region}.console.aws.amazon.com/devops-guru/#/dashboard",
+    "Status for this stack: ${var.enable_devops_guru ? "ENABLED" : "DISABLED"}",
+    var.enable_devops_guru
+    ? "Analyzing all resources tagged with app-boundary key 'DevOps-Guru-aws-secure-infra'; insights flow to the SNS topic and the remediation Lambda."
+    : "Set enable_devops_guru = true to turn it on (billed per resource-hour; only one resource-collection type may be active per account).",
+  ])
+}

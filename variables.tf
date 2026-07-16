@@ -61,8 +61,8 @@ variable "ssh_allowed_cidr" {
     The default is intentionally a documentation placeholder that should be
     overridden — do NOT leave it at 0.0.0.0/0 in a real deployment.
   EOT
-  type    = string
-  default = "203.0.113.0/24"
+  type        = string
+  default     = "203.0.113.0/24"
 
   validation {
     condition     = can(cidrhost(var.ssh_allowed_cidr, 0))
@@ -95,8 +95,8 @@ variable "enable_alb" {
       internet for patching, and the instance's security group only accepts web
       traffic from the ALB. This removes the instance's direct internet exposure.
   EOT
-  type    = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 variable "single_nat_gateway" {
@@ -109,8 +109,8 @@ variable "single_nat_gateway" {
     false — one NAT gateway per AZ (highly available), at roughly double the
       NAT hourly + data cost. Recommended for real production.
   EOT
-  type    = bool
-  default = true
+  type        = bool
+  default     = true
 }
 
 variable "container_port" {
@@ -164,11 +164,69 @@ variable "db_password" {
     (TF_VAR_db_password), a *.tfvars file that is gitignored, or a secrets
     manager. Never hardcode it.
   EOT
-  type      = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 
   validation {
     condition     = length(var.db_password) >= 12
     error_message = "db_password must be at least 12 characters."
   }
+}
+
+# -----------------------------------------------------------------------------
+# AIOps / observability
+# -----------------------------------------------------------------------------
+variable "alert_email" {
+  description = <<-EOT
+    Email address subscribed to the SNS alerts topic. Leave empty to create the
+    topic without an email subscription (e.g. if you wire the topic to Slack or
+    PagerDuty out of band). When set, AWS sends a confirmation email that must
+    be accepted before alerts are delivered.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.alert_email == "" || can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be a valid email address or an empty string."
+  }
+}
+
+variable "anomaly_band_width" {
+  description = <<-EOT
+    Standard-deviation band width for the CloudWatch anomaly-detection model
+    (the "2" in ANOMALY_DETECTION_BAND(m1, 2)). Larger = wider band = fewer,
+    higher-confidence alerts; smaller = tighter band = more sensitive. 2 is the
+    common default (~95% of normal behavior falls inside the band).
+  EOT
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.anomaly_band_width > 0 && var.anomaly_band_width <= 10
+    error_message = "anomaly_band_width must be between 0 (exclusive) and 10."
+  }
+}
+
+variable "enable_devops_guru" {
+  description = <<-EOT
+    Enable Amazon DevOps Guru analysis of this stack (tag-based resource
+    collection). DevOps Guru is billed per resource-hour analyzed, so it is
+    opt-in. NOTE: only ONE resource-collection type can be active per account —
+    if another stack already enabled CloudFormation- or account-wide coverage,
+    applying this will conflict.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "enable_auto_remediation" {
+  description = <<-EOT
+    When true, the remediation Lambda is allowed to actually restart the EC2
+    instance via SSM in response to a high-severity anomaly. When false, the
+    Lambda still runs and logs what it WOULD do, but takes no action (dry-run).
+    Start with false, confirm the detection/notification flow, then enable.
+  EOT
+  type        = bool
+  default     = false
 }
