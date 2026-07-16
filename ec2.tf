@@ -29,9 +29,12 @@ resource "aws_instance" "app" {
   ami           = data.aws_ssm_parameter.al2023.value
   instance_type = var.ec2_instance_type
 
-  subnet_id                   = aws_subnet.public[0].id
+  # Placement depends on the topology:
+  #   enable_alb = false -> public subnet + public IP (direct web tier, dev)
+  #   enable_alb = true  -> private subnet, no public IP (behind the ALB)
+  subnet_id                   = var.enable_alb ? aws_subnet.private[0].id : aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.ec2.id]
-  associate_public_ip_address = true
+  associate_public_ip_address = var.enable_alb ? false : true
 
   # Enforce IMDSv2 (token-required) to protect instance credentials against
   # SSRF-style metadata theft — a standard EC2 hardening baseline.

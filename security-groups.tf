@@ -29,8 +29,14 @@ resource "aws_security_group" "ec2" {
   }
 }
 
+# Direct public web access (dev baseline, enable_alb = false).
+# When the ALB is enabled these two rules are removed: the instance is private
+# and only the ALB may reach it (see ec2_from_alb below).
+#
 # HTTP from anywhere — public web traffic.
 resource "aws_vpc_security_group_ingress_rule" "ec2_http" {
+  count = var.enable_alb ? 0 : 1
+
   security_group_id = aws_security_group.ec2.id
   description       = "HTTP from anywhere"
   cidr_ipv4         = "0.0.0.0/0"
@@ -41,12 +47,28 @@ resource "aws_vpc_security_group_ingress_rule" "ec2_http" {
 
 # HTTPS from anywhere — public web traffic (TLS).
 resource "aws_vpc_security_group_ingress_rule" "ec2_https" {
+  count = var.enable_alb ? 0 : 1
+
   security_group_id = aws_security_group.ec2.id
   description       = "HTTPS from anywhere"
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
+}
+
+# Production web access (enable_alb = true): the application port is reachable
+# ONLY from the ALB security group. This is the rule that keeps the instance
+# private — no CIDR, just the ALB SG as the source.
+resource "aws_vpc_security_group_ingress_rule" "ec2_from_alb" {
+  count = var.enable_alb ? 1 : 0
+
+  security_group_id            = aws_security_group.ec2.id
+  description                  = "App port from the ALB security group only"
+  referenced_security_group_id = aws_security_group.alb[0].id
+  from_port                    = var.container_port
+  to_port                      = var.container_port
+  ip_protocol                  = "tcp"
 }
 
 # SSH ONLY from the administrator IP range (var.ssh_allowed_cidr).

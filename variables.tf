@@ -61,8 +61,8 @@ variable "ssh_allowed_cidr" {
     The default is intentionally a documentation placeholder that should be
     overridden — do NOT leave it at 0.0.0.0/0 in a real deployment.
   EOT
-  type        = string
-  default     = "203.0.113.0/24"
+  type    = string
+  default = "203.0.113.0/24"
 
   validation {
     condition     = can(cidrhost(var.ssh_allowed_cidr, 0))
@@ -77,6 +77,46 @@ variable "ec2_instance_type" {
   description = "EC2 instance type for the application server."
   type        = string
   default     = "t3.micro"
+}
+
+# -----------------------------------------------------------------------------
+# Production hardening toggle
+# -----------------------------------------------------------------------------
+variable "enable_alb" {
+  description = <<-EOT
+    Production topology switch.
+
+    false (default) — cost-effective dev baseline: the EC2 instance sits in a
+      public subnet with a public IP and takes web traffic directly.
+
+    true — hardened production topology: an internet-facing Application Load
+      Balancer is created in the public subnets, the EC2 instance is moved to a
+      PRIVATE subnet (no public IP), NAT gateways provide the instance outbound
+      internet for patching, and the instance's security group only accepts web
+      traffic from the ALB. This removes the instance's direct internet exposure.
+  EOT
+  type    = bool
+  default = false
+}
+
+variable "single_nat_gateway" {
+  description = <<-EOT
+    When enable_alb = true, controls NAT gateway redundancy.
+
+    true (default) — one NAT gateway shared by both private subnets. Cheaper,
+      but a single-AZ failure removes outbound internet for the private tier.
+
+    false — one NAT gateway per AZ (highly available), at roughly double the
+      NAT hourly + data cost. Recommended for real production.
+  EOT
+  type    = bool
+  default = true
+}
+
+variable "container_port" {
+  description = "Port the application listens on, targeted by the ALB and opened in the EC2 SG when enable_alb = true. Defaults to 80 (the user_data placeholder does not run a server; adjust to your app)."
+  type        = number
+  default     = 80
 }
 
 # -----------------------------------------------------------------------------
@@ -124,8 +164,8 @@ variable "db_password" {
     (TF_VAR_db_password), a *.tfvars file that is gitignored, or a secrets
     manager. Never hardcode it.
   EOT
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 
   validation {
     condition     = length(var.db_password) >= 12
