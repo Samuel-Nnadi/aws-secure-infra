@@ -5,7 +5,6 @@
 [![Terraform CI](https://github.com/Samuel-Nnadi/aws-secure-infra/actions/workflows/terraform.yml/badge.svg)](https://github.com/Samuel-Nnadi/aws-secure-infra/actions/workflows/terraform.yml)
 [![Terraform](https://img.shields.io/badge/Terraform-%3E%3D1.3-7B42BC.svg)](https://www.terraform.io/)
 [![AWS Provider](https://img.shields.io/badge/AWS%20Provider-~%3E5.0-FF9900.svg)](https://registry.terraform.io/providers/hashicorp/aws/latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
@@ -311,9 +310,3 @@ deliberately accepted and documented with justification in
   RDS-managed backups; ingress is tightly restricted.
 - **AWS-0164** (public-subnet IP) — the intended dev web tier; set
   `enable_alb = true` to remove it (see [Production topology](#production-topology-enable_alb--true)).
-
----
-
-## License
-
-[MIT](LICENSE)
